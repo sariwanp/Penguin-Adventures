@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>เพนกวินน้อยผจญภัย - เกมคณิตศาสตร์ 3D</title>
+    <!-- Tailwind CSS for UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for beautiful icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Prompt & Sarabun for professional Thai typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Three.js for 3D engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            overflow: hidden;
+            background-color: #0f172a;
+        }
+        /* Glassmorphism utility */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-panel-light {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        /* Custom 3D action buttons */
+        .btn-game {
+            transform: translateY(0);
+            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 6px 0px 0px #1e3a8a;
+        }
+        .btn-game:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0px 0px #1e3a8a;
+        }
+        /* Custom Keyframes for Animations */
+        @keyframes pulse-fast {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .pulse-urgent {
+            animation: pulse-fast 0.5s infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        .floating-ui {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px) translateY(2px) rotate(-1deg); }
+            50% { transform: translateX(4px) translateY(-2px) rotate(1deg); }
+            75% { transform: translateX(-2px) translateY(1px); }
+        }
+        .screen-shake {
+            animation: shake 0.25s ease-in-out infinite;
+        }
+        .danger-vignette {
+            box-shadow: inset 0 0 120px rgba(239, 68, 68, 0.7);
+            animation: pulse-fast 0.4s infinite;
+        }
+    </style>
+</head>
+<body id="game-body" class="w-screen h-screen relative flex flex-col justify-between text-white transition-colors duration-300">
+
+    <!-- 3D Viewport container that fills behind all UI elements -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0"></div>
+
+    <!-- Danger Overlay (Red flash when monster is close) -->
+    <div id="danger-overlay" class="absolute inset-0 w-full h-full z-0 pointer-events-none transition-opacity duration-300 opacity-0 danger-vignette"></div>
+
+    <!-- Background Sound Toggle and Level display -->
+    <div class="absolute top-4 left-4 right-4 z-10 flex justify-between items-center pointer-events-none">
+        <div class="flex gap-2 pointer-events-auto">
+            <button id="btn-audio" class="glass-panel p-3 rounded-full text-white hover:bg-slate-800 transition flex items-center justify-center w-12 h-12 text-xl" title="เปิด/ปิดเสียง">
+                <i class="fas fa-volume-up" id="audio-icon"></i>
+            </button>
+            <button id="btn-info" class="glass-panel p-3 rounded-full text-white hover:bg-slate-800 transition flex items-center justify-center w-12 h-12 text-xl" title="วิธีเล่น">
+                <i class="fas fa-question"></i>
+            </button>
+        </div>
+        
+        <!-- Live Score & High Score Counter -->
+        <div class="glass-panel px-4 py-2 rounded-full text-sm md:text-base font-semibold pointer-events-auto flex gap-4 items-center">
+            <div>🔥 คะแนน: <span id="hud-score" class="text-yellow-400 font-bold text-lg transition-transform">0</span></div>
+            <div class="border-l border-slate-600 pl-4 hidden sm:block">🏆 สถิติสูงสุด: <span id="hud-highscore" class="text-emerald-400 font-bold">0</span></div>
+            <div class="border-l border-slate-600 pl-4">⚡ คอมโบ: <span id="hud-combo" class="text-orange-500 font-black text-xl drop-shadow-md transition-all duration-200 inline-block">0</span></div>
+        </div>
+    </div>
+
+    <!-- Main Menu Screen (Overlay) -->
+    <div id="screen-start" class="absolute inset-0 z-20 flex flex-col justify-between items-center p-6 md:p-12 transition-all duration-500">
+        <!-- Floating Title -->
+        <div class="text-center mt-12 floating-ui max-w-lg w-full">
+            <h1 class="text-4xl md:text-6xl font-extrabold tracking-wider drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 via-blue-100 to-indigo-300">
+                เพนกวินน้อย
+            </h1>
+            <p class="text-3xl md:text-5xl font-extrabold tracking-wider mt-2 drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] text-amber-400">
+                ผจญภัยสูตรคูณ 3D
+            </p>
+            <div class="mt-3 flex justify-center gap-2">
+                <span class="bg-cyan-600 text-xs px-2 py-1 rounded-full uppercase font-bold tracking-widest text-white shadow">200 Levels Challenge</span>
+                <span class="bg-indigo-600 text-xs px-2 py-1 rounded-full uppercase font-bold tracking-widest text-white shadow">3D Graphics</span>
+            </div>
+        </div>
+
+        <!-- Center panel containing Game Settings & Level Select -->
+        <div class="w-full max-w-xl glass-panel p-6 rounded-3xl shadow-2xl flex flex-col gap-5 text-center my-auto">
+            <div>
+                <h3 class="text-lg font-bold text-cyan-300 mb-2">🚀 เลือกจุดเริ่มต้น (มีทั้งหมด 200 ด่าน)</h3>
+                <div class="grid grid-cols-4 gap-2 mb-4">
+                    <button class="level-checkpoint-btn bg-slate-800 hover:bg-cyan-600 text-white p-2 rounded-xl text-sm font-bold border border-cyan-500/30 transition duration-200 active:scale-95" data-lvl="1">ด่าน 1 <span class="block text-[10px] text-cyan-300 font-normal">เริ่มแรก</span></button>
+                    <button class="level-checkpoint-btn bg-slate-800 hover:bg-cyan-600 text-white p-2 rounded-xl text-sm font-bold border border-cyan-500/30 transition duration-200 active:scale-95" data-lvl="50">ด่าน 50 <span class="block text-[10px] text-cyan-300 font-normal">เริ่มยาก</span></button>
+                    <button class="level-checkpoint-btn bg-slate-800 hover:bg-cyan-600 text-white p-2 rounded-xl text-sm font-bold border border-cyan-500/30 transition duration-200 active:scale-95" data-lvl="100">ด่าน 100 <span class="block text-[10px] text-cyan-300 font-normal">ผู้เชี่ยวชาญ</span></button>
+                    <button class="level-checkpoint-btn bg-slate-800 hover:bg-cyan-600 text-white p-2 rounded-xl text-sm font-bold border border-cyan-500/30 transition duration-200 active:scale-95" data-lvl="150">ด่าน 150 <span class="block text-[10px] text-cyan-300 font-normal">ระดับตำนาน</span></button>
+                </div>
+                <div class="text-xs text-slate-400 mb-4">หรือเลือกด่านกำหนดเอง (1-200): 
+                    <input type="number" id="input-custom-level" min="1" max="200" value="1" class="w-16 bg-slate-900 border border-slate-700 text-cyan-400 px-2 py-1 rounded text-center ml-1 focus:outline-none focus:border-cyan-400 font-bold">
+                </div>
+            </div>
+
+            <div class="border-t border-slate-700/50 pt-4">
+                <button id="btn-play" class="w-full py-4 px-8 bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-900 text-2xl font-black rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-teal-500/20 uppercase tracking-wider flex items-center justify-center gap-3">
+                    <i class="fas fa-play"></i> เริ่มผจญภัยวิ่งหนีปีศาจ!
+                </button>
+            </div>
+        </div>
+
+        <!-- Bottom Footer with Credit/Instructions Summary -->
+        <div class="text-center text-xs text-slate-400 bg-slate-950/40 px-4 py-2 rounded-full">
+            <i class="fas fa-keyboard"></i> เคล็ดลับ PC: ใช้คีย์บอร์ดเลข <kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">1</kbd>, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">2</kbd>, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">3</kbd>, <kbd class="bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">4</kbd> ในการเลือกคำตอบด่วนได้
+        </div>
+    </div>
+
+    <!-- Gameplay Interface (Only visible when playing) -->
+    <div id="screen-game" class="absolute inset-0 z-10 flex flex-col justify-between p-4 pointer-events-none hidden">
+        
+        <!-- Top Dashboard: Progress, Levels and Monster Alert Bar -->
+        <div class="w-full flex flex-col gap-2 mt-12 pointer-events-auto">
+            <div class="flex justify-between items-center">
+                <!-- Current Level / Game Mode -->
+                <div class="glass-panel px-4 py-2 rounded-2xl flex items-center gap-3">
+                    <div class="bg-cyan-600 rounded-lg px-2.5 py-1 text-center font-extrabold text-sm shadow">
+                        ด่านที่ <span id="hud-level">1</span>
+                    </div>
+                    <div class="text-xs text-slate-300 font-medium hidden sm:block">
+                        สูตรคูณ <span id="hud-level-desc" class="text-cyan-300">แม่ 2-12</span>
+                    </div>
+                </div>
+
+                <!-- Mission Goal (Answer correctly 3 times to level up) -->
+                <div class="glass-panel px-4 py-2 rounded-2xl text-xs md:text-sm font-semibold flex items-center gap-2">
+                    🎯 เป้าหมายผ่านด่าน: 
+                    <div class="flex gap-1" id="hud-progress-stars">
+                        <!-- Dynamic Checkmarks or Stars based on answers solved in this level -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Danger Alert Bar (Distance of Monster) -->
+            <div class="w-full glass-panel p-2 rounded-xl flex items-center gap-3 relative">
+                <span class="text-xs font-bold text-red-400 animate-pulse flex items-center gap-1">
+                    <i class="fas fa-skull"></i> ปีศาจ:
+                </span>
+                <div class="flex-1 bg-slate-900 h-3 rounded-full overflow-hidden relative border border-slate-800">
+                    <!-- Progress bar representing danger (monster proximity) -->
+                    <div id="hud-danger-bar" class="bg-gradient-to-r from-emerald-500 via-yellow-400 to-red-600 h-full w-[30%] transition-all duration-300"></div>
+                </div>
+                <span id="hud-danger-text" class="text-xs font-semibold text-slate-300 min-w-[70px] text-right">ระยะปลอดภัย</span>
+            </div>
+        </div>
+
+        <!-- Center: Giant Multiplication Card & Timer Bar -->
+        <div class="w-full max-w-md mx-auto my-auto flex flex-col gap-4 pointer-events-auto mt-4 mb-4">
+            
+            <!-- Math Question Card -->
+            <div class="bg-transparent p-6 rounded-3xl relative text-center border-2 border-cyan-500/50 overflow-hidden transform transition duration-300 shadow-none backdrop-blur-none" id="math-card">
+
+                <div class="text-slate-200 text-xs font-bold uppercase tracking-wider mb-2 flex justify-between items-center drop-shadow-md">
+                    <span>หาคำตอบสูตรคูณที่ถูกต้อง!</span>
+                    <span id="multiplier-tag" class="bg-slate-800/80 text-cyan-400 px-2 py-0.5 rounded-md text-[10px]">แม่ 2</span>
+                </div>
+
+                <!-- Equation Text -->
+                <div class="text-5xl md:text-6xl font-black text-white drop-shadow-[0_5px_5px_rgba(0,0,0,0.9)] tracking-tight my-2" id="math-question">
+                    2 &times; 3 = ?
+                </div>
+
+                <!-- Shrinking Timer bar directly inside card -->
+                <div class="mt-4 w-full bg-slate-900/80 h-2.5 rounded-full overflow-hidden relative shadow-inner">
+                    <div id="math-timer-fill" class="bg-gradient-to-r from-emerald-400 to-cyan-400 h-full w-full"></div>
+                </div>
+                <div class="text-right text-xs text-slate-100 mt-1 font-mono font-bold drop-shadow-md">
+                    เหลือเวลา: <span id="math-timer-sec" class="text-cyan-300 drop-shadow-md">8.0</span> วินาที
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom: Interactive Answer Options Dashboard -->
+        <div class="w-full max-w-2xl mx-auto pointer-events-auto bg-slate-900/90 border border-slate-700/50 p-4 rounded-3xl shadow-2xl backdrop-blur-md mb-2">
+            <div class="text-xs text-center text-slate-400 mb-2 font-semibold">เลือกคำตอบที่ถูกต้องเพื่อเร่งความเร็วหนีปีศาจ!</div>
+            <div class="grid grid-cols-2 gap-3" id="answer-grid">
+                <!-- 4 Interactive buttons -->
+                <button class="btn-game bg-gradient-to-br from-slate-800 to-slate-900 hover:from-cyan-950 hover:to-slate-900 border-2 border-slate-700/60 text-white font-extrabold text-2xl py-4 rounded-2xl transition-all duration-100 flex items-center justify-between px-6" data-index="0">
+                    <span class="bg-slate-700 text-slate-200 text-xs w-6 h-6 rounded-md flex items-center justify-center font-bold mr-2">1</span>
+                    <span class="flex-1 text-center option-val">0</span>
+                </button>
+                <button class="btn-game bg-gradient-to-br from-slate-800 to-slate-900 hover:from-cyan-950 hover:to-slate-900 border-2 border-slate-700/60 text-white font-extrabold text-2xl py-4 rounded-2xl transition-all duration-100 flex items-center justify-between px-6" data-index="1">
+                    <span class="bg-slate-700 text-slate-200 text-xs w-6 h-6 rounded-md flex items-center justify-center font-bold mr-2">2</span>
+                    <span class="flex-1 text-center option-val">0</span>
+                </button>
+                <button class="btn-game bg-gradient-to-br from-slate-800 to-slate-900 hover:from-cyan-950 hover:to-slate-900 border-2 border-slate-700/60 text-white font-extrabold text-2xl py-4 rounded-2xl transition-all duration-100 flex items-center justify-between px-6" data-index="2">
+                    <span class="bg-slate-700 text-slate-200 text-xs w-6 h-6 rounded-md flex items-center justify-center font-bold mr-2">3</span>
+                    <span class="flex-1 text-center option-val">0</span>
+                </button>
+                <button class="btn-game bg-gradient-to-br from-slate-800 to-slate-900 hover:from-cyan-950 hover:to-slate-900 border-2 border-slate-700/60 text-white font-extrabold text-2xl py-4 rounded-2xl transition-all duration-100 flex items-center justify-between px-6" data-index="3">
+                    <span class="bg-slate-700 text-slate-200 text-xs w-6 h-6 rounded-md flex items-center justify-center font-bold mr-2">4</span>
+                    <span class="flex-1 text-center option-val">0</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Game Over Screen Overlay (Hidden by default) -->
+    <div id="screen-gameover" class="absolute inset-0 z-30 flex flex-col justify-center items-center p-6 bg-slate-950/90 backdrop-blur-lg hidden">
+        <div class="w-full max-w-md glass-panel p-8 rounded-3xl text-center border-2 border-red-500/50 shadow-2xl relative">
+            <div class="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-red-600 text-white w-20 h-20 rounded-full flex items-center justify-center text-4xl shadow-xl border-4 border-slate-950">
+                <i class="fas fa-skull-crossbones"></i>
+            </div>
+            
+            <h2 class="text-3xl md:text-4xl font-extrabold text-red-500 mt-10 mb-2">คุณโดนปีศาจจับได้!</h2>
+            <p class="text-slate-300 text-sm mb-6">คุณตอบช้าหรือตอบผิด! กฎเหล็กของเกมคือต้อง <strong class="text-red-400">เริ่มเล่นใหม่ตั้งแต่ด่าน 1</strong> ทุกครั้งที่พลาด</p>
+            
+            <!-- Statistics Panel -->
+            <div class="bg-slate-900/80 p-4 rounded-2xl mb-6 grid grid-cols-2 gap-4 text-left border border-slate-800">
+                <div>
+                    <span class="text-xs text-slate-400 block font-semibold">ไปได้ไกลสุด:</span>
+                    <span class="text-lg font-bold text-cyan-400">ด่านที่ <span id="gameover-level">1</span></span>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 block font-semibold">คะแนนทั้งหมด:</span>
+                    <span class="text-lg font-bold text-yellow-400"><span id="gameover-score">0</span> คะแนน</span>
+                </div>
+            </div>
+
+            <!-- Retry & Menu Buttons -->
+            <div class="flex flex-col gap-3">
+                <button id="btn-restart" class="w-full py-4 px-6 bg-gradient-to-r from-red-600 to-orange-600 text-white text-xl font-black rounded-xl hover:scale-105 active:scale-95 transition shadow-lg shadow-orange-500/20 uppercase">
+                    <i class="fas fa-undo mr-2"></i> เริ่มใหม่ตั้งแต่ด่าน 1
+                </button>
+                <button id="btn-back-menu" class="w-full py-3 px-6 bg-slate-800 text-slate-300 text-sm font-bold rounded-xl hover:bg-slate-700 transition">
+                    <i class="fas fa-home mr-2"></i> กลับหน้าแรก
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Completed / Master Victory Screen Overlay (Level 200 beat) -->
+    <div id="screen-victory" class="absolute inset-0 z-30 flex flex-col justify-center items-center p-6 bg-slate-950/95 backdrop-blur-lg hidden">
+        <div class="w-full max-w-lg glass-panel p-8 rounded-3xl text-center border-4 border-yellow-400 shadow-2xl relative">
+            <div class="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-yellow-400 text-slate-950 w-24 h-24 rounded-full flex items-center justify-center text-5xl shadow-xl border-4 border-slate-950 animate-bounce">
+                <i class="fas fa-crown"></i>
+            </div>
+            
+            <h2 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-amber-500 mt-12 mb-2">พิชิตด่านสูงสุด!</h2>
+            <p class="text-cyan-300 text-lg font-bold mb-4">👑 ราชาสูตรคูณเพนกวินผู้พิชิต 200 ด่าน</p>
+            <p class="text-slate-300 text-sm mb-6">คุณได้แสดงทักษะคณิตศาสตร์อันยอดเยี่ยม นำพาเพนกวินน้อยให้รอดพ้นจากปีศาจทั้งหมดจนสิ้นสุดดินแดนน้ำแข็งอย่างปลอดภัย!</p>
+            
+            <!-- Super celebration stats -->
+            <div class="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 rounded-2xl mb-6 border border-yellow-500/30">
+                <div class="text-sm text-slate-300 mb-1">คะแนนรวมอันทรงเกียรติ:</div>
+                <div class="text-5xl font-black text-yellow-400 tracking-wider mb-2"><span id="victory-score">0</span></div>
+                <p class="text-xs text-slate-400">ขอบคุณที่ร่วมเป็นกำลังหลักในการนำเพนกวินน้อยกลับบ้านสำเร็จ!</p>
+            </div>
+
+            <!-- Back to start -->
+            <button id="btn-victory-home" class="w-full py-4 px-6 bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 text-xl font-extrabold rounded-xl hover:scale-105 active:scale-95 transition-all shadow-lg">
+                <i class="fas fa-redo mr-2"></i> เล่นเพื่อทำสถิติอีกรอบ
+            </button>
+        </div>
+    </div>
+
+    <!-- Next Level / Level Up Celebratory popup (quick dismiss) -->
+    <div id="toast-level-clear" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-25 pointer-events-none hidden scale-75 opacity-0 transition-all duration-300">
+        <div class="glass-panel-light text-slate-950 px-8 py-6 rounded-3xl text-center shadow-2xl flex flex-col items-center gap-2 border-4 border-emerald-400">
+            <div class="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center text-3xl shadow-lg">
+                <i class="fas fa-star animate-spin"></i>
+            </div>
+            <h3 class="text-2xl font-black text-slate-900">เก่งมาก! ผ่านด่านแล้ว</h3>
+            <p class="text-slate-700 text-sm font-bold">ความเร็ววิ่งเร็วขึ้น ปีศาจไล่ไวขึ้น!</p>
+            <div class="text-xl font-bold text-indigo-600 mt-2">กำลังเตรียม ด่านต่อไป...</div>
+        </div>
+    </div>
+
+    <!-- Help Modal Overlay -->
+    <div id="modal-info" class="absolute inset-0 z-40 bg-slate-950/80 flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-md glass-panel p-6 rounded-3xl border border-slate-700 shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-black text-cyan-400"><i class="fas fa-info-circle mr-2"></i> วิธีเล่นและกติกา</h3>
+                <button id="btn-info-close" class="text-slate-400 hover:text-white text-xl"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="text-sm text-slate-300 space-y-3 leading-relaxed">
+                <p><strong class="text-white">1. การวิ่งหนีปีศาจ:</strong> เพนกวินของคุณจะเริ่มวิ่งจากซ้ายไปขวา โดยมีปีศาจคอยวิ่งไล่ตามด้านหลัง หากหลอดปีศาจ (Danger Bar) เต็มหรือเวลาตอบหมด ปีศาจจะจับคุณได้ทันที!</p>
+                <p><strong class="text-white">2. การเลือกคำตอบ:</strong> ตัวเกมจะนำเสนอโจทย์สูตรคูณตั้งแต่ <strong class="text-yellow-400">แม่ 2 ถึง 12</strong> ให้คุณแตะเลือกคำตอบที่ถูกต้องจากตัวเลือกทั้ง 4 ด้านล่าง</p>
+                <p><strong class="text-white">3. การไล่ด่าน (200 ด่าน):</strong></p>
+                <ul class="list-disc pl-5 text-slate-400 space-y-1">
+                    <li>ด่าน 1-20: ตัวคูณง่าย ๆ (เน้นแม่ 2-5) เวลานาน (10-15 วินาที)</li>
+                    <li>ด่าน 21-100: รวมแม่ 2-12 เวลาตอบน้อยลงเรื่อย ๆ (5-8 วินาที)</li>
+                    <li>ด่าน 101-200: สุ่มสูตรคูณอย่างรวดเร็ว บีบเวลาด่วนจี๋ (เหลือน้อยสุด 2.5 วินาทีต่อข้อ!)</li>
+                </ul>
+                <p><strong class="text-white">4. คีย์บอร์ดช่วยเหลือ:</strong> หากเล่นบนคอมพิวเตอร์ สามารถกดเลข <kbd class="bg-slate-800 px-1 py-0.5 rounded border border-slate-700 text-xs text-slate-200">1</kbd> <kbd class="bg-slate-800 px-1 py-0.5 rounded border border-slate-700 text-xs text-slate-200">2</kbd> <kbd class="bg-slate-800 px-1 py-0.5 rounded border border-slate-700 text-xs text-slate-200">3</kbd> <kbd class="bg-slate-800 px-1 py-0.5 rounded border border-slate-700 text-xs text-slate-200">4</kbd> เพื่อตอบคำตอบได้อย่างว่องไว!</p>
+            </div>
+            <button id="btn-info-ok" class="w-full mt-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold rounded-xl transition">
+                เข้าใจแล้ว! ลุยเลย
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Web Audio Synth setup (No external asset dependency)
+        const soundEnabled = { val: true };
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(type) {
+            if (!soundEnabled.val) return;
+            // Resume context if suspended
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'correct') {
+                    // Fast rising chime
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.15); // C6
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'wrong' || type === 'gameover') {
+                    // Grim descending growl / buzz
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(220.00, now); // A3
+                    osc.frequency.linearRampToValueAtTime(55.00, now + 0.5); // A1
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                    osc.start(now);
+                    osc.stop(now + 0.6);
+                } else if (type === 'click') {
+                    // Soft woodblock click
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(800, now);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } else if (type === 'warning') {
+                    // High alarm beat
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(1200, now);
+                    gain.gain.setValueAtTime(0.08, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'levelclear') {
+                    // Upward fanfare
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(392.00, now); // G4
+                    osc.frequency.setValueAtTime(523.25, now + 0.1); // C5
+                    osc.frequency.setValueAtTime(659.25, now + 0.2); // E5
+                    osc.frequency.setValueAtTime(783.99, now + 0.3); // G5
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.4);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                    osc.start(now);
+                    osc.stop(now + 0.6);
+                }
+            } catch (e) {
+                console.warn("Audio Context Error: ", e);
+            }
+        }
+    </script>
+
+    <script>
+        // --- 3D THREE.JS WORLD SETUP ---
+        const container = document.getElementById('canvas-container');
+        let scene, camera, renderer;
+        let penguin, monster, ground;
+        let scenicObjects = [];
+        let particles = [];
+        let successParticles = []; // Array for combo explosion particles
+        let runningSpeed = 0.08; // dynamic running velocity based on state/level
+        let defaultMonsterDistance = 14; // Default separation
+        let targetMonsterX = -7; // Interpolation targets
+        let actualMonsterX = -7;
+        let isDeadState = false;
+        let ambientLight; // Reference for danger coloring
+
+        // Colors
+        const COLOR_ICE = 0x93c5fd;
+        const COLOR_SNOW = 0xffffff;
+        const COLOR_PENGUIN_MAIN = 0x1e293b; // Deep dark navy slate
+        const COLOR_BEAK = 0xf59e0b; // Amber orange
+        const COLOR_MONSTER = 0x3b0764; // Dark violet purple
+
+        function init3DScene() {
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a); // Match slate bg
+            // Adding winter/snow storm fog for visual depth
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.025);
+
+            // Camera Setup (Side scrolling tracking angle)
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(0, 5, 14); // Positioned to look down slightly at the penguin and monster
+            camera.lookAt(0, 1.2, 0);
+
+            // Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lighting Design
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            const pointLight = new THREE.PointLight(0x06b6d4, 1.2, 15); // Light source emanating from math card glow
+            pointLight.position.set(0, 3, 2);
+            scene.add(pointLight);
+
+            // Environment: Snowy Ground Track
+            createGround();
+
+            // Characters Construction
+            createPenguinCharacter();
+            createMonsterCharacter();
+
+            // Scenic decorations: Snowy Pines & Ice Crags
+            for (let i = 0; i < 15; i++) {
+                spawnScenicElement(THREE.MathUtils.randFloat(-20, 20));
+            }
+
+            // Atmosphere: Snowfall particle effect
+            createSnowParticles();
+
+            // Responsiveness handler
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createGround() {
+            // Infinite scrolling track simulator using segments
+            const geometry = new THREE.BoxGeometry(100, 1, 15);
+            const material = new THREE.MeshStandardMaterial({
+                color: COLOR_ICE,
+                roughness: 0.1,
+                metalness: 0.1,
+                flatShading: true
+            });
+            ground = new THREE.Mesh(geometry, material);
+            ground.position.y = -0.5;
+            ground.receiveShadow = true;
+            scene.add(ground);
+        }
+
+        function createPenguinCharacter() {
+            penguin = new THREE.Group();
+
+            // Body (Slightly squished dark oval)
+            const bodyGeo = new THREE.SphereGeometry(1, 32, 16);
+            bodyGeo.scale(1, 1.2, 0.8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: COLOR_PENGUIN_MAIN, roughness: 0.6 });
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            bodyMesh.castShadow = true;
+            penguin.add(bodyMesh);
+
+            // Cute white belly
+            const bellyGeo = new THREE.SphereGeometry(0.75, 32, 16);
+            bellyGeo.scale(0.9, 1, 0.5);
+            const bellyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 });
+            const bellyMesh = new THREE.Mesh(bellyGeo, bellyMat);
+            bellyMesh.position.set(0, -0.1, 0.55);
+            penguin.add(bellyMesh);
+
+            // Beak (Cone)
+            const beakGeo = new THREE.ConeGeometry(0.2, 0.5, 4);
+            beakGeo.rotateX(Math.PI / 2);
+            const beakMat = new THREE.MeshStandardMaterial({ color: COLOR_BEAK, roughness: 0.5 });
+            const beakMesh = new THREE.Mesh(beakGeo, beakMat);
+            beakMesh.position.set(0, 0.35, 0.8);
+            penguin.add(beakMesh);
+
+            // Big, cute eyes
+            const eyeGeo = new THREE.SphereGeometry(0.12, 16, 16);
+            const pupilGeo = new THREE.SphereGeometry(0.06, 16, 16);
+            const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const pupilMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+
+            const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeL.position.set(-0.25, 0.55, 0.68);
+            const pupilL = new THREE.Mesh(pupilGeo, pupilMat);
+            pupilL.position.set(-0.25, 0.55, 0.78);
+            penguin.add(eyeL, pupilL);
+
+            const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeR.position.set(0.25, 0.55, 0.68);
+            const pupilR = new THREE.Mesh(pupilGeo, pupilMat);
+            pupilR.position.set(0.25, 0.55, 0.78);
+            penguin.add(eyeR, pupilR);
+
+            // Left Foot (Orange small round capsule)
+            const footGeo = new THREE.BoxGeometry(0.3, 0.15, 0.5);
+            const footMat = new THREE.MeshStandardMaterial({ color: COLOR_BEAK, roughness: 0.8 });
+            penguin.footL = new THREE.Mesh(footGeo, footMat);
+            penguin.footL.position.set(-0.4, -1.1, 0.2);
+            penguin.add(penguin.footL);
+
+            // Right Foot
+            penguin.footR = new THREE.Mesh(footGeo, footMat);
+            penguin.footR.position.set(0.4, -1.1, 0.2);
+            penguin.add(penguin.footR);
+
+            // Flippers / Wings
+            const wingGeo = new THREE.BoxGeometry(0.15, 0.8, 0.3);
+            const wingMat = new THREE.MeshStandardMaterial({ color: COLOR_PENGUIN_MAIN });
+            
+            penguin.wingL = new THREE.Mesh(wingGeo, wingMat);
+            penguin.wingL.position.set(-1.05, 0.1, 0);
+            penguin.add(penguin.wingL);
+
+            penguin.wingR = new THREE.Mesh(wingGeo, wingMat);
+            penguin.wingR.position.set(1.05, 0.1, 0);
+            penguin.add(penguin.wingR);
+
+            // Global group positioning
+            penguin.position.set(2, 1.2, 0); // Penguin runs ahead on the track
+            penguin.rotation.y = Math.PI / 2; // Facing right (along the positive X axis direction of camera view)
+            scene.add(penguin);
+        }
+
+        function createMonsterCharacter() {
+            monster = new THREE.Group();
+
+            // 1. Main body (Round plump cute sphere)
+            const bodyGeo = new THREE.SphereGeometry(1.2, 32, 32);
+            bodyGeo.scale(1, 1.15, 0.95); // slightly oval and squishy
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0x9333ea, // Vibrant purple
+                roughness: 0.5,
+                metalness: 0.1
+            });
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            bodyMesh.castShadow = true;
+            monster.add(bodyMesh);
+
+            // 2. Cute light-pink belly patch
+            const bellyGeo = new THREE.SphereGeometry(0.8, 32, 16);
+            bellyGeo.scale(0.95, 0.95, 0.45);
+            const bellyMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.7 }); // Pink belly
+            const bellyMesh = new THREE.Mesh(bellyGeo, bellyMat);
+            bellyMesh.position.set(0, -0.2, 0.8);
+            monster.add(bellyMesh);
+
+            // 3. Large cute eyes (Anime-style with blue iris and pupils)
+            const eyeWhiteGeo = new THREE.SphereGeometry(0.32, 32, 32);
+            const eyeIrisGeo = new THREE.SphereGeometry(0.18, 16, 16);
+            const pupilGeo = new THREE.SphereGeometry(0.09, 16, 16);
+            const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+            const eyeIrisMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.3 }); // Cute blue eyes
+            const pupilMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+
+            // Left Eye Group
+            const eyeLGroup = new THREE.Group();
+            const eyeLWhite = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
+            const eyeLIris = new THREE.Mesh(eyeIrisGeo, eyeIrisMat);
+            eyeLIris.position.set(0.05, 0, 0.22); // look slightly inwards
+            const eyeLPupil = new THREE.Mesh(pupilGeo, pupilMat);
+            eyeLPupil.position.set(0.07, 0, 0.36);
+            eyeLGroup.add(eyeLWhite, eyeLIris, eyeLPupil);
+            eyeLGroup.position.set(0.38, 0.4, 0.85);
+            monster.add(eyeLGroup);
+
+            // Right Eye Group
+            const eyeRGroup = new THREE.Group();
+            const eyeRWhite = new THREE.Mesh(eyeWhiteGeo, eyeWhiteMat);
+            const eyeRIris = new THREE.Mesh(eyeIrisGeo, eyeIrisMat);
+            eyeRIris.position.set(-0.05, 0, 0.22); // look slightly inwards
+            const eyeRPupil = new THREE.Mesh(pupilGeo, pupilMat);
+            eyeRPupil.position.set(-0.07, 0, 0.36);
+            eyeRGroup.add(eyeRWhite, eyeRIris, eyeRPupil);
+            eyeRGroup.position.set(-0.38, 0.4, 0.85);
+            monster.add(eyeRGroup);
+
+            // 4. Rosy cheeks
+            const cheekGeo = new THREE.SphereGeometry(0.15, 16, 16);
+            cheekGeo.scale(1.2, 0.8, 0.5);
+            const cheekMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.8 });
+            
+            const cheekL = new THREE.Mesh(cheekGeo, cheekMat);
+            cheekL.position.set(0.68, 0.08, 0.85);
+            const cheekR = new THREE.Mesh(cheekGeo, cheekMat);
+            cheekR.position.set(-0.68, 0.08, 0.85);
+            monster.add(cheekL, cheekR);
+
+            // 5. Mischievous Happy Mouth with a single cute tooth
+            const mouthGeo = new THREE.SphereGeometry(0.25, 16, 16);
+            mouthGeo.scale(1.1, 0.6, 0.5);
+            const mouthMat = new THREE.MeshStandardMaterial({ color: 0x1e1b4b, roughness: 0.9 }); // Dark indigo mouth
+            const mouthMesh = new THREE.Mesh(mouthGeo, mouthMat);
+            mouthMesh.position.set(0, -0.15, 0.98);
+            monster.add(mouthMesh);
+
+            const toothGeo = new THREE.ConeGeometry(0.08, 0.16, 4);
+            toothGeo.rotateX(Math.PI); // Point down
+            const toothMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
+            const toothMesh = new THREE.Mesh(toothGeo, toothMat);
+            toothMesh.position.set(0, -0.05, 1.16);
+            monster.add(toothMesh);
+
+            // 6. Cute Horns (Yellow cone horns)
+            const hornGeo = new THREE.ConeGeometry(0.22, 0.65, 8);
+            hornGeo.rotateX(-0.1); // slant back slightly
+            const hornMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4 });
+            
+            const hornL = new THREE.Mesh(hornGeo, hornMat);
+            hornL.position.set(0.45, 1.35, -0.1);
+            hornL.rotation.z = -0.22; // tilt outward
+            
+            const hornR = new THREE.Mesh(hornGeo, hornMat);
+            hornR.position.set(-0.45, 1.35, -0.1);
+            hornR.rotation.z = 0.22; // tilt outward
+            
+            monster.add(hornL, hornR);
+
+            // 7. Cute Grabby Arms (Longer, positioned slightly forward to reach around)
+            const armGeo = new THREE.CylinderGeometry(0.11, 0.11, 1.15, 12);
+            armGeo.translate(0, -0.57, 0); // set pivot at the top of the shoulder
+            const armMat = new THREE.MeshStandardMaterial({ color: 0x9333ea, roughness: 0.5 });
+
+            monster.armL = new THREE.Mesh(armGeo, armMat);
+            // Position slightly forward (Z = 0.3) so they wrap around the front of the body
+            monster.armL.position.set(1.15, 0.1, 0.3);
+            monster.armL.rotation.z = -0.6; // flared out slightly
+            monster.add(monster.armL);
+
+            monster.armR = new THREE.Mesh(armGeo, armMat);
+            monster.armR.position.set(-1.15, 0.1, 0.3);
+            monster.armR.rotation.z = 0.6; // flared out slightly
+            monster.add(monster.armR);
+
+            // สร้างรูปทรงสำหรับขาและเท้าที่ขาดหายไป
+            const legGeo = new THREE.CylinderGeometry(0.12, 0.1, 0.5, 12);
+            const footGeo = new THREE.BoxGeometry(0.25, 0.15, 0.35);
+            const footMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.8 }); // เท้าสีเหลืองให้เข้ากับเขา
+
+            // 8. Cute Legs & Feet (Groups for proper walking rotation)
+            monster.legL = new THREE.Group();
+            const legLMesh = new THREE.Mesh(legGeo, armMat);
+            legLMesh.position.y = -0.25;
+            const footLMesh = new THREE.Mesh(footGeo, footMat);
+            footLMesh.position.set(0, -0.5, 0.12);
+            footLMesh.castShadow = true;
+            monster.legL.add(legLMesh, footLMesh);
+            monster.legL.position.set(0.45, -0.9, 0);
+            monster.add(monster.legL);
+
+            // Right Leg Group
+            monster.legR = new THREE.Group();
+            const legRMesh = new THREE.Mesh(legGeo, armMat);
+            legRMesh.position.y = -0.25;
+            const footRMesh = new THREE.Mesh(footGeo, footMat);
+            footRMesh.position.set(0, -0.5, 0.12);
+            footRMesh.castShadow = true;
+            monster.legR.add(legRMesh, footRMesh);
+            monster.legR.position.set(-0.45, -0.9, 0);
+            monster.add(monster.legR);
+
+            // Initial Position: Behind the penguin
+            monster.position.set(-6, 1.4, 0); // slightly lower so legs align beautifully with ground
+            monster.rotation.y = Math.PI / 2;
+            scene.add(monster);
+        }
+
+        function spawnScenicElement(startX) {
+            // Generates randomly snow pine trees or mountain ice structures along the road borders
+            const isTree = Math.random() > 0.4;
+            const element = new THREE.Group();
+
+            if (isTree) {
+                // Pine Trunk
+                const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 1, 8);
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 0.5;
+                element.add(trunk);
+
+                // Leaves (Pine cones)
+                const leavesMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.8, flatShading: true });
+                const leaf1 = new THREE.Mesh(new THREE.ConeGeometry(1, 1.5, 5), leavesMat);
+                leaf1.position.y = 1.5;
+                const leaf2 = new THREE.Mesh(new THREE.ConeGeometry(0.75, 1.2, 5), leavesMat);
+                leaf2.position.y = 2.3;
+                
+                // Add snow top
+                const snowTopGeo = new THREE.ConeGeometry(0.4, 0.6, 5);
+                const snowTopMat = new THREE.MeshStandardMaterial({ color: COLOR_SNOW });
+                const snowTop = new THREE.Mesh(snowTopGeo, snowTopMat);
+                snowTop.position.y = 2.8;
+
+                element.add(leaf1, leaf2, snowTop);
+            } else {
+                // Crystal Ice Shard / Rock
+                const shardGeo = new THREE.DodecahedronGeometry(THREE.MathUtils.randFloat(0.5, 1.2));
+                shardGeo.scale(1, THREE.MathUtils.randFloat(1.5, 2.5), 1);
+                const shardMat = new THREE.MeshStandardMaterial({ color: 0xb9e2fe, roughness: 0.2, metalness: 0.2, flatShading: true });
+                const shard = new THREE.Mesh(shardGeo, shardMat);
+                shard.position.y = 0.5;
+                element.add(shard);
+            }
+
+            // Scatter along side margins (either background or foreground borders)
+            const zSide = Math.random() > 0.5 ? THREE.MathUtils.randFloat(3, 6) : THREE.MathUtils.randFloat(-3, -6);
+            element.position.set(startX, 0, zSide);
+            scene.add(element);
+            scenicObjects.push(element);
+        }
+
+        function createSnowParticles() {
+            // Adds ambiance with floating white dots falling down
+            const count = 150;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = THREE.MathUtils.randFloat(-15, 15);     // X
+                positions[i * 3 + 1] = THREE.MathUtils.randFloat(0, 15);   // Y
+                positions[i * 3 + 2] = THREE.MathUtils.randFloat(-8, 8);   // Z
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            // Textureless particles using round points
+            const material = new THREE.PointsMaterial({
+                color: COLOR_SNOW,
+                size: 0.15,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            const pSystem = new THREE.Points(geometry, material);
+            scene.add(pSystem);
+            particles.push(pSystem);
+        }
+
+        function spawnSuccessParticles() {
+            // Create a burst of bright cubes around penguin
+            const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x34d399 }); // Emerald green
+            for(let i=0; i<15; i++) {
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(penguin.position);
+                mesh.position.y += 1.5;
+                // Random explosion velocity
+                mesh.userData.velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.4,
+                    Math.random() * 0.4 + 0.1,
+                    (Math.random() - 0.5) * 0.4
+                );
+                mesh.userData.life = 1.0;
+                scene.add(mesh);
+                successParticles.push(mesh);
+            }
+        }
+
+        function animate3DWorld(time) {
+            requestAnimationFrame(animate3DWorld);
+
+            const speedMultiplier = isDeadState ? 0 : runningSpeed;
+
+            // 1. Move Environment backwards to simulate speedy forward motion
+            scenicObjects.forEach(obj => {
+                obj.position.x -= speedMultiplier;
+                // If it passes off-screen left, reset it back on the right
+                if (obj.position.x < -15) {
+                    obj.position.x = 15;
+                    // Randomize new side placement slightly to avoid repetitiveness
+                    obj.position.z = Math.random() > 0.5 ? THREE.MathUtils.randFloat(3, 6) : THREE.MathUtils.randFloat(-3, -6);
+                }
+            });
+
+            // 2. Animate Snowfall Particles
+            particles.forEach(pSystem => {
+                const positions = pSystem.geometry.attributes.position.array;
+                const len = positions.length;
+                for (let i = 0; i < len; i += 3) {
+                    positions[i + 1] -= 0.04; // fall down Y
+                    positions[i] -= speedMultiplier * 0.5; // drift with run speed X
+                    
+                    // Reset if too low
+                    if (positions[i + 1] < 0) {
+                        positions[i + 1] = 12;
+                    }
+                    if (positions[i] < -15) {
+                        positions[i] = 15;
+                    }
+                }
+                pSystem.geometry.attributes.position.needsUpdate = true;
+            });
+
+            for(let i = successParticles.length - 1; i >= 0; i--) {
+                const p = successParticles[i];
+                p.position.add(p.userData.velocity);
+                p.userData.velocity.y -= 0.015; // Gravity pull
+                p.userData.life -= 0.03; // Fade out
+                p.scale.setScalar(p.userData.life);
+                p.rotation.x += 0.1;
+                p.rotation.y += 0.1;
+                if(p.userData.life <= 0) {
+                    scene.remove(p);
+                    successParticles.splice(i, 1);
+                }
+            }
+
+            // 3. Characters Idle / Running Animations
+            if (!isDeadState) {
+                const clock = time * 0.015;
+                
+                // Penguin Run Wobble Cycle
+                penguin.position.y = 1.2 + Math.abs(Math.sin(clock)) * 0.22; // hop up/down
+                penguin.rotation.z = Math.sin(clock) * 0.15; // side wobble
+                
+                // Leg swing
+                penguin.footL.rotation.x = Math.sin(clock) * 0.6;
+                penguin.footR.rotation.x = -Math.sin(clock) * 0.6;
+                
+                // Wing flap flapping
+                penguin.wingL.rotation.z = Math.sin(clock * 1.5) * 0.35;
+                penguin.wingR.rotation.z = -Math.sin(clock * 1.5) * 0.35;
+
+                monster.position.y = 1.4 + Math.sin(clock * 0.8) * 0.18; // gentle floating bobbing
+                monster.rotation.z = Math.cos(clock * 0.5) * 0.04; // side-to-side cute body rolling
+                monster.scale.setScalar(1 + Math.sin(clock * 2) * 0.03); // cute breathing pulse
+
+                // Active running animation of cute arms
+                if (monster.armL && monster.armR) {
+                    monster.armL.rotation.x = Math.sin(clock * 1.5) * 0.6;
+                    monster.armL.rotation.z = -0.6 + Math.cos(clock * 1.5) * 0.2;
+                    monster.armR.rotation.x = -Math.sin(clock * 1.5) * 0.6;
+                    monster.armR.rotation.z = 0.6 - Math.cos(clock * 1.5) * 0.2;
+                }
+
+                // Active running animation of cute legs
+                if (monster.legL && monster.legR) {
+                    monster.legL.rotation.x = -Math.sin(clock * 1.5) * 0.5;
+                    monster.legR.rotation.x = Math.sin(clock * 1.5) * 0.5;
+                }
+            } else {
+                // 1. Precise catch gap: Stop monster at x = penguin.x - 1.55 to avoid body clipping!
+                const targetCatchX = penguin.position.x - 1.55;
+                if (monster.position.x < targetCatchX) {
+                    monster.position.x += 0.15;
+                } else {
+                    monster.position.x = targetCatchX;
+                }
+
+                // 2. Lift penguin up in the air as if being held/squeezed
+                monster.position.y = 1.4;
+                penguin.position.y = 1.65 + Math.sin(time * 0.08) * 0.1; // struggling hover height
+                penguin.position.z = 0; // ensure perfect track center alignment
+
+                // 3. Struggle reaction: Shiver/wiggle & backward dramatic tilt
+                penguin.rotation.z = Math.sin(time * 0.12) * 0.25; // frantic shaking
+                penguin.rotation.x = -0.45; // tilt backward dramatically in surprise
+                penguin.rotation.y = Math.PI / 2; // maintain side profile orientation
+
+                // Frantic desperate wing flapping
+                penguin.wingL.rotation.z = -1.4 + Math.sin(time * 0.3) * 0.6;
+                penguin.wingR.rotation.z = 1.4 - Math.sin(time * 0.3) * 0.6;
+
+                // 4. Wrap the long arms around the penguin (Clasping catch pose)
+                if (monster.armL && monster.armR) {
+                    // Rotate forward (around X) and inward (around Y/Z)
+                    // Left arm (background)
+                    monster.armL.rotation.x = 1.35; 
+                    monster.armL.rotation.y = -0.5; 
+                    monster.armL.rotation.z = -0.4;
+
+                    // Right arm (foreground, closest to camera)
+                    monster.armR.rotation.x = 1.35; 
+                    monster.armR.rotation.y = 0.5; 
+                    monster.armR.rotation.z = 0.4;
+                }
+
+                // Stop leg running animation, stand flat
+                if (monster.legL && monster.legR) {
+                    monster.legL.rotation.x = 0;
+                    monster.legR.rotation.x = 0;
+                }
+            }
+
+            // 4. Update relative Monster distance smoothly
+            actualMonsterX += (targetMonsterX - actualMonsterX) * 0.1;
+            monster.position.x = actualMonsterX;
+
+            if (isDeadState) {
+                // Smoothly zoom in close to the penguin and monster to show the grabbing detail clearly!
+                const focusX = penguin.position.x - 0.75; // mid point of struggle
+                camera.position.x += (focusX - camera.position.x) * 0.08;
+                camera.position.y += (1.8 - camera.position.y) * 0.08;
+                camera.position.z += (5.2 - camera.position.z) * 0.08; // Cinematic close-up
+                camera.lookAt(focusX, 1.3, 0);
+            } else {
+                // Standard side scrolling perspective tracking
+                camera.position.x += (0 - camera.position.x) * 0.1;
+                camera.position.y += (5 - camera.position.y) * 0.1;
+                camera.position.z += (14 - camera.position.z) * 0.1;
+                camera.lookAt(0, 1.2, 0);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+    </script>
+
+    <script>
+        // --- MULTIPLIER GAME STATE MANAGER ---
+        const GAME_CONFIG = {
+            maxLevels: 200,
+            answersNeededPerLevel: 3, // Player needs 3 correct answers to complete a level
+        };
+
+        const state = {
+            level: 1,
+            score: 0,
+            combo: 0,
+            highestLevel: 1,
+            levelSuccesses: 0, // current answers solved correctly in this specific level
+            currentQuestion: {
+                a: 2,
+                b: 1,
+                answer: 2,
+                options: []
+            },
+            timeLeft: 10,
+            timeTotal: 10,
+            timerInterval: null,
+            gameState: 'start', // 'start', 'playing', 'gameover', 'victory'
+            gameScore: 0
+        };
+
+        // Load stats from LocalStorage
+        function loadSaveData() {
+            const savedHighScore = localStorage.getItem('penguin_math_high_score');
+            if (savedHighScore) {
+                document.getElementById('hud-highscore').textContent = savedHighScore;
+            }
+        }
+
+        function saveHighScore(score) {
+            const currentHigh = parseInt(localStorage.getItem('penguin_math_high_score') || '0');
+            if (score > currentHigh) {
+                localStorage.setItem('penguin_math_high_score', score);
+                document.getElementById('hud-highscore').textContent = score;
+            }
+        }
+
+        // Generate customized formula dynamic by current level
+        function getLevelParameters(level) {
+            let maxTime = 12; // generous easy start
+            let minA = 2;
+            let maxA = 2;
+            let minB = 1;
+            let maxB = 12;
+
+            // Scale down time smoothly from 12s to 2.5s over 200 levels
+            maxTime = Math.max(2.5, 12 - (level * 0.05));
+
+            if (level <= 11) {
+                // Progressive single factor learning
+                // Level 1 -> แม่ 2, Level 2 -> แม่ 3, ..., Level 11 -> แม่ 12
+                minA = level + 1;
+                maxA = level + 1;
+            } else if (level <= 30) {
+                // Moderate Mix
+                minA = 2;
+                maxA = 5;
+            } else if (level <= 80) {
+                // Full Mix
+                minA = 2;
+                maxA = 9;
+            } else if (level <= 150) {
+                // Hard Mix
+                minA = 2;
+                maxA = 12;
+            } else {
+                // Legend Master Challenge (Extreme rapid speed)
+                minA = 3;
+                maxA = 12;
+                minB = 3;
+                maxB = 12;
+            }
+
+            return { maxTime, minA, maxA, minB, maxB };
+        }
+
+        function generateQuestion() {
+            const params = getLevelParameters(state.level);
+            
+            // Generate valid random factor within limits
+            const factorA = Math.floor(Math.random() * (params.maxA - params.minA + 1)) + params.minA;
+            const factorB = Math.floor(Math.random() * (params.maxB - params.minB + 1)) + params.minB;
+            const answer = factorA * factorB;
+
+            // Set up level math properties tag
+            document.getElementById('multiplier-tag').textContent = `แม่ ${factorA}`;
+
+            // Generate plausible wrong options around the true answer
+            const optionsSet = new Set();
+            optionsSet.add(answer);
+
+            while (optionsSet.size < 4) {
+                let offset = Math.floor(Math.random() * 20) - 10;
+                // Add factor-aligned mistakes or simple offset
+                let optionWrong = answer + offset;
+                if (Math.random() > 0.5) {
+                    optionWrong = factorA * (factorB + (Math.random() > 0.5 ? 1 : -1));
+                }
+
+                if (optionWrong > 0 && optionWrong !== answer) {
+                    optionsSet.add(optionWrong);
+                }
+            }
+
+            const optionsArray = Array.from(optionsSet).sort((a, b) => a - b);
+
+            state.currentQuestion = {
+                a: factorA,
+                b: factorB,
+                answer: answer,
+                options: optionsArray
+            };
+
+            state.timeLeft = params.maxTime;
+            state.timeTotal = params.maxTime;
+
+            // Render details on Screen Card
+            document.getElementById('math-question').innerHTML = `${factorA} <span class="text-cyan-400">&times;</span> ${factorB} = <span class="text-amber-400">?</span>`;
+            
+            // Populating Choice Button values
+            const optElements = document.querySelectorAll('.option-val');
+            optElements.forEach((el, index) => {
+                el.textContent = optionsArray[index];
+            });
+
+            // Adjust relative danger of Monster
+            // When a new question starts, monster is safely far. It closes in as the timer for the question decays.
+            updateMonsterDistance(1);
+        }
+
+        function drawLevelProgressStars() {
+            const container = document.getElementById('hud-progress-stars');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < GAME_CONFIG.answersNeededPerLevel; i++) {
+                const star = document.createElement('span');
+                if (i < state.levelSuccesses) {
+                    // Star filled (Success)
+                    star.className = "text-yellow-400 text-sm animate-pulse";
+                    star.innerHTML = '<i class="fas fa-star"></i>';
+                } else {
+                    // Star empty (Pending)
+                    star.className = "text-slate-600 text-sm";
+                    star.innerHTML = '<i class="far fa-star"></i>';
+                }
+                container.appendChild(star);
+            }
+        }
+
+        function updateMonsterDistance(ratio) {
+            // ratio = time left ratio (1.0 down to 0)
+            // If time is plenty (1.0), monster is far behind. If time is 0, monster has reached the penguin.
+            const minX = -6; // Far behind safe
+            const maxX = 0.45; // Touch/Catching boundary to avoid body clipping
+
+            // Linearly interpolate target position
+            // Monster distance is influenced by time, but combo pushes it back slightly
+            targetMonsterX = minX + (1 - ratio) * (maxX - minX);
+            
+            // Constrain monster pushback so it doesn't go off-screen
+            targetMonsterX = Math.max(-8, targetMonsterX);
+
+            // Update warning alerts in HUD bar
+            const dangerPercentage = Math.round((1 - ratio) * 100);
+            const dangerBar = document.getElementById('hud-danger-bar');
+            const dangerText = document.getElementById('hud-danger-text');
+            const gameBody = document.getElementById('game-body');
+            const dangerOverlay = document.getElementById('danger-overlay');
+            
+            dangerBar.style.width = `${dangerPercentage}%`;
+
+            if (dangerPercentage < 35) {
+                dangerText.textContent = "ระยะปลอดภัย";
+                dangerText.className = "text-xs font-semibold text-emerald-400";
+                gameBody.classList.remove('screen-shake');
+                dangerOverlay.classList.remove('opacity-100');
+                dangerOverlay.classList.add('opacity-0');
+                if(ambientLight) ambientLight.color.setHex(0xffffff);
+            } else if (dangerPercentage < 75) {
+                dangerText.textContent = "ใกล้เข้ามาแล้ว!";
+                dangerText.className = "text-xs font-semibold text-yellow-400";
+                gameBody.classList.remove('screen-shake');
+                dangerOverlay.classList.remove('opacity-100');
+                dangerOverlay.classList.add('opacity-0');
+                if(ambientLight) ambientLight.color.setHex(0xffcccc);
+            } else {
+                dangerText.textContent = "อันตรายสูงสุด!!!";
+                dangerText.className = "text-xs font-semibold text-red-500 pulse-urgent";
+                // Heartbeat alarm warning beeps
+                if (Math.random() > 0.7) {
+                    playSound('warning');
+                }
+                // Trigger screen shake & red alert
+                gameBody.classList.add('screen-shake');
+                dangerOverlay.classList.remove('opacity-0');
+                dangerOverlay.classList.add('opacity-100');
+                if(ambientLight) ambientLight.color.setHex(0xff7777);
+            }
+        }
+
+        function startGameLoop() {
+            if (state.timerInterval) clearInterval(state.timerInterval);
+            
+            generateQuestion();
+            drawLevelProgressStars();
+
+            state.timerInterval = setInterval(() => {
+                if (state.gameState !== 'playing') return;
+
+                state.timeLeft -= 0.05; // decrement step of 50ms
+
+                if (state.timeLeft <= 0) {
+                    state.timeLeft = 0;
+                    handleGameOver();
+                } else {
+                    // Refresh HUD bars
+                    const timerPercent = (state.timeLeft / state.timeTotal) * 100;
+                    document.getElementById('math-timer-fill').style.width = `${timerPercent}%`;
+                    document.getElementById('math-timer-sec').textContent = state.timeLeft.toFixed(1);
+
+                    // Color transitions of timer
+                    if (timerPercent < 30) {
+                        document.getElementById('math-timer-fill').className = "bg-gradient-to-r from-rose-500 to-red-600 h-full w-full";
+                    } else if (timerPercent < 60) {
+                        document.getElementById('math-timer-fill').className = "bg-gradient-to-r from-amber-400 to-yellow-500 h-full w-full";
+                    } else {
+                        document.getElementById('math-timer-fill').className = "bg-gradient-to-r from-emerald-400 to-cyan-400 h-full w-full";
+                    }
+
+                    updateMonsterDistance(state.timeLeft / state.timeTotal);
+                }
+            }, 50);
+        }
+
+        function submitAnswer(choiceIndex) {
+            if (state.gameState !== 'playing' || isDeadState) return;
+
+            const chosenAnswer = state.currentQuestion.options[choiceIndex];
+            const mathCard = document.getElementById('math-card');
+
+            if (chosenAnswer === state.currentQuestion.answer) {
+                // CORRECT CHOICE!
+                playSound('correct');
+                
+                state.combo++;
+                // Multiplier based on combo (max x3)
+                const comboMult = Math.min(3.0, 1 + (state.combo * 0.2)); 
+                const pointsEarned = Math.max(10, Math.round(state.timeLeft * 10)) * comboMult;
+                state.score += Math.round(pointsEarned);
+                
+                state.levelSuccesses++;
+                
+                // Reward: Push monster back! Add extra time visually by pushing target
+                targetMonsterX -= 1.5; 
+                spawnSuccessParticles();
+                
+                // Visual bounce/success flare on Math Card
+                mathCard.classList.add('border-emerald-400', 'scale-105');
+                setTimeout(() => {
+                    mathCard.classList.remove('border-emerald-400', 'scale-105');
+                }, 200);
+
+                // Update Scoreboard HUD
+                document.getElementById('hud-score').textContent = state.score;
+                
+                // Combo UI Bounce
+                const comboEl = document.getElementById('hud-combo');
+                comboEl.textContent = state.combo;
+                comboEl.classList.add('scale-150');
+                setTimeout(() => comboEl.classList.remove('scale-150'), 200);
+
+                if (state.levelSuccesses >= GAME_CONFIG.answersNeededPerLevel) {
+                    // Level Completed!
+                    handleLevelUp();
+                } else {
+                    // Next question in current level
+                    generateQuestion();
+                    drawLevelProgressStars();
+                }
+            } else {
+                // INCORRECT CHOICE -> Instant game over
+                handleGameOver();
+            }
+        }
+
+        function handleLevelUp() {
+            if (state.level >= GAME_CONFIG.maxLevels) {
+                // Complete game win!
+                handleVictory();
+                return;
+            }
+
+            playSound('levelclear');
+            state.gameState = 'toast'; // pause interaction during level transition
+            clearInterval(state.timerInterval);
+
+            // Level Toast pop up
+            const toast = document.getElementById('toast-level-clear');
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.remove('scale-75', 'opacity-0');
+                toast.classList.add('scale-100', 'opacity-100');
+            }, 10);
+
+            // Accelerate background environment velocity temporarily for speed rush feel
+            runningSpeed = 0.4;
+
+            setTimeout(() => {
+                // Dismiss Toast
+                toast.classList.remove('scale-100', 'opacity-100');
+                toast.classList.add('scale-75', 'opacity-0');
+                
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                    
+                    // Level state advances
+                    state.level++;
+                    state.levelSuccesses = 0;
+                    state.gameState = 'playing';
+                    runningSpeed = 0.08 + (state.level * 0.001); // Permanent slight increase in run pace
+
+                    // UI update
+                    document.getElementById('hud-level').textContent = state.level;
+                    
+                    // Easy to read descriptive level summary
+                    const params = getLevelParameters(state.level);
+                    document.getElementById('hud-level-desc').textContent = `สุ่มแม่ ${params.minA}-${params.maxA} (${params.maxTime.toFixed(1)}วินาที)`;
+
+                    // Initiate next level questions loop
+                    startGameLoop();
+                }, 300);
+            }, 1800);
+        }
+
+        function handleGameOver() {
+            playSound('wrong');
+            isDeadState = true;
+            state.gameState = 'gameover';
+            clearInterval(state.timerInterval);
+            
+            document.getElementById('game-body').classList.remove('screen-shake');
+            document.getElementById('danger-overlay').classList.remove('opacity-100');
+            document.getElementById('danger-overlay').classList.add('opacity-0');
+            if(ambientLight) ambientLight.color.setHex(0xffffff);
+
+            saveHighScore(state.score);
+
+            // Bring down screen UI overlay
+            document.getElementById('gameover-level').textContent = state.level;
+            document.getElementById('gameover-score').textContent = state.score;
+
+            setTimeout(() => {
+                document.getElementById('screen-game').classList.add('hidden');
+                document.getElementById('screen-gameover').classList.remove('hidden');
+            }, 800); // Small brief delay to let death animation happen in 3D
+        }
+
+        function handleVictory() {
+            playSound('levelclear');
+            state.gameState = 'victory';
+            clearInterval(state.timerInterval);
+
+            saveHighScore(state.score);
+
+            document.getElementById('victory-score').textContent = state.score;
+
+            document.getElementById('screen-game').classList.add('hidden');
+            document.getElementById('screen-victory').classList.remove('hidden');
+        }
+
+        // --- BUTTON BINDINGS & LISTENERS ---
+
+        // Level Select Checkpoints
+        document.querySelectorAll('.level-checkpoint-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                playSound('click');
+                const lvl = parseInt(btn.getAttribute('data-lvl'));
+                document.getElementById('input-custom-level').value = lvl;
+                
+                // Active visual states
+                document.querySelectorAll('.level-checkpoint-btn').forEach(b => b.classList.remove('bg-cyan-600'));
+                btn.classList.add('bg-cyan-600');
+            });
+        });
+
+        // Start Play Button
+        document.getElementById('btn-play').addEventListener('click', () => {
+            playSound('click');
+            const chosenLevel = parseInt(document.getElementById('input-custom-level').value) || 1;
+            
+            // Constrain limits
+            state.level = Math.max(1, Math.min(200, chosenLevel));
+            state.score = 0;
+            state.combo = 0;
+            state.levelSuccesses = 0;
+            state.gameState = 'playing';
+            isDeadState = false;
+            runningSpeed = 0.08 + (state.level * 0.001);
+
+            // Re-center character positions
+            actualMonsterX = -6;
+            targetMonsterX = -6;
+
+            // Render level text
+            document.getElementById('hud-level').textContent = state.level;
+            document.getElementById('hud-score').textContent = 0;
+            document.getElementById('hud-combo').textContent = 0;
+            
+            const params = getLevelParameters(state.level);
+            document.getElementById('hud-level-desc').textContent = `สุ่มแม่ ${params.minA}-${params.maxA} (${params.maxTime.toFixed(1)}วินาที)`;
+
+            // Screen switch
+            document.getElementById('screen-start').classList.add('hidden');
+            document.getElementById('screen-game').classList.remove('hidden');
+
+            startGameLoop();
+        });
+
+        // Restart Play Button (Game Over screen)
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            playSound('click');
+            
+            // Fast reset to level 1 (Hardcore mode per rules: any mistake = start from level 1)
+            state.level = 1;
+            state.score = 0;
+            state.combo = 0;
+            state.levelSuccesses = 0;
+            state.gameState = 'playing';
+            isDeadState = false;
+            runningSpeed = 0.08 + (state.level * 0.001);
+
+            actualMonsterX = -6;
+            targetMonsterX = -6;
+
+            // Reset HUD Level texts to Level 1
+            document.getElementById('hud-level').textContent = state.level;
+            const params = getLevelParameters(state.level);
+            document.getElementById('hud-level-desc').textContent = `สุ่มแม่ ${params.minA}-${params.maxA} (${params.maxTime.toFixed(1)}วินาที)`;
+
+            document.getElementById('hud-score').textContent = 0;
+            document.getElementById('hud-combo').textContent = 0;
+
+            document.getElementById('screen-gameover').classList.add('hidden');
+            document.getElementById('screen-game').classList.remove('hidden');
+
+            startGameLoop();
+        });
+
+        // Back to Menu Button
+        document.getElementById('btn-back-menu').addEventListener('click', () => {
+            playSound('click');
+            document.getElementById('screen-gameover').classList.add('hidden');
+            document.getElementById('screen-start').classList.remove('hidden');
+        });
+
+        // Victory screen restart button
+        document.getElementById('btn-victory-home').addEventListener('click', () => {
+            playSound('click');
+            document.getElementById('screen-victory').classList.add('hidden');
+            document.getElementById('screen-start').classList.remove('hidden');
+        });
+
+        // Option selection bind
+        document.querySelectorAll('#answer-grid button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.getAttribute('data-index'));
+                submitAnswer(idx);
+            });
+        });
+
+        // Keyboard support listener (1, 2, 3, 4)
+        window.addEventListener('keydown', (e) => {
+            if (state.gameState !== 'playing') return;
+            if (e.key === '1' || e.key === 'NumPad1') submitAnswer(0);
+            if (e.key === '2' || e.key === 'NumPad2') submitAnswer(1);
+            if (e.key === '3' || e.key === 'NumPad3') submitAnswer(2);
+            if (e.key === '4' || e.key === 'NumPad4') submitAnswer(3);
+        });
+
+        // Info popup
+        document.getElementById('btn-info').addEventListener('click', () => {
+            playSound('click');
+            document.getElementById('modal-info').classList.remove('hidden');
+        });
+        document.getElementById('btn-info-close').addEventListener('click', () => {
+            playSound('click');
+            document.getElementById('modal-info').classList.add('hidden');
+        });
+        document.getElementById('btn-info-ok').addEventListener('click', () => {
+            playSound('click');
+            document.getElementById('modal-info').classList.add('hidden');
+        });
+
+        // Audio controls
+        document.getElementById('btn-audio').addEventListener('click', () => {
+            soundEnabled.val = !soundEnabled.val;
+            const icon = document.getElementById('audio-icon');
+            if (soundEnabled.val) {
+                icon.className = 'fas fa-volume-up';
+            } else {
+                icon.className = 'fas fa-volume-mute';
+            }
+        });
+
+        // Initialize scene and load data on windows load
+        window.onload = function() {
+            init3DScene();
+            loadSaveData();
+            animate3DWorld(0);
+        };
+    </script>
+</body>
+</html>
